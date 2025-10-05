@@ -1,12 +1,16 @@
 # LuxNoise Sweep Analysis
 
-This repository packages the analysis artefacts for the RNAP/Ribo resource sweeps we ran over the three LuxNoise conditions (Cond1–Cond3).
+This repository collects the artefacts generated while characterising the LuxNoise simulations across both the initial "Trail" timelapse runs and the larger RNAP/Ribo resource sweeps (Cond1–Cond3).
 
-## Contents
+## Repository layout
 
-- `data/Cond*/summary_cond*.csv` – 500-replicate sweep summaries covering RNAP totals {20, 35, 50, 75, 100, 150, 200} and ribosome totals {50, 100, 200, 300, 400, 500}. Each row stores mean GFP, SD, CV, and CV² calculated over the steady-state window (t = 3000–4000).
-- `plots/` – pre-rendered visualisations created from the summaries (heatmaps, contour maps, 3D surfaces, line slices, and condition comparisons).
-- `analyze_sweeps.py` – the script that (re)generates the plots. It expects the summary CSVs described above.
+- `data/Cond*/summary_cond*.csv` – 500-replicate sweep summaries covering RNAP totals {20, 35, 50, 75, 100, 150, 200} and ribosome totals {50, 100, 200, 300, 400, 500}. Each row stores mean GFP, SD, CV, and CV² computed over the steady-state window (t = 3000–4000).
+- `data/trails/Trail*/Cond*/` – key outputs from the earlier Trail 1/2/3 runs: the per-condition summary CSV, mean-curve CSV, and timelapse plot PNG.
+- `plots/` – pre-rendered sweep visualisations (heatmaps, contour maps, 3D surfaces, and line comparisons) produced by `analyze_sweeps.py`.
+- `scripts/` – all simulation drivers used in this work:
+  - `cond*_timelapse.py` – single-condition Gillespie simulators (defaults N=500, T=6000).
+  - `cond1_sweep.py`, `cond2_sweep.py`, `cond3_sweep.py` – resource sweep drivers (updated to support the larger grids).
+- `analyze_sweeps.py` – plotting utility that ingests the sweep summaries and regenerates everything in `plots/`.
 
 ## Reproducing the plots
 
@@ -14,19 +18,22 @@ This repository packages the analysis artefacts for the RNAP/Ribo resource sweep
 python analyze_sweeps.py
 ```
 
-`analyze_sweeps.py` accepts optional flags if the data or output directories need to be relocated:
+`analyze_sweeps.py` accepts optional flags if you need to relocate the data or output directories, or focus the cross-condition comparison on a specific ribosome value:
 
 ```bash
 python analyze_sweeps.py --data path/to/data --plots path/to/output --ribo 300
 ```
 
-The `--ribo` argument controls which ribosome value is used for the cross-condition line comparisons (defaults to the middle value present in the data).
+## Re-running the simulations
 
-## Raw data
+- Timelapse trails: execute `python scripts/cond*_timelapse.py` with the desired `-N`, `--T`, and output arguments.
+- Resource sweeps: execute `python scripts/cond*_sweep.py` with custom `--RNAP`, `--Ribo`, `--load`, `-N`, and `--T` values. The current sweep dataset was generated with RNAP totals {20, 35, 50, 75, 100, 150, 200}, ribosome totals {50, 100, 200, 300, 400, 500}, `load=0`, `N=500`, and `T=4000`.
 
-The raw timelapse trajectories (hundreds of MB) are not stored here; they live in the original simulation workspace under `Trail sweep 1/Cond*/cond*_RNAP*_Ribo*_raw.csv`. Regenerate them by running the appropriate sweep scripts if needed before using `analyze_sweeps.py` on new inputs.
+### Raw timelapse trajectories
+
+Full per-replicate timelapse CSVs are large (tens of MB per grid point) and therefore omitted from version control. They remain available in the working directory under `Trail */Cond*/cond*_timelapse_raw.csv` and `Trail sweep 1/Cond*/cond*_RNAP*_Ribo*_raw.csv`. Re-run the relevant scripts if you need refreshed raw data before plotting.
 
 ## Next steps
 
 - Extend `analyze_sweeps.py` with statistical overlays (e.g. confidence intervals) once additional replicates or alternative seeds are available.
-- Integrate the script into a notebook or pipeline for automated reporting across future sweeps.
+- Promote the analysis into a notebook or automated reporting pipeline for future sweeps.

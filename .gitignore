@@ -5,3 +5,5 @@ plots/*.tmp
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+# keep curated timelapse plots for trail data
+!data/trails/**/cond*_plot.png
