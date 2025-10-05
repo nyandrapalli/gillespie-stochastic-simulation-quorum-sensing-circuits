@@ -37,3 +37,7 @@ Full per-replicate timelapse CSVs are large (tens of MB per grid point) and ther
 
 - Extend `analyze_sweeps.py` with statistical overlays (e.g. confidence intervals) once additional replicates or alternative seeds are available.
 - Promote the analysis into a notebook or automated reporting pipeline for future sweeps.
+
+## Licence
+
+Code in this repository is released under the MIT License (see LICENSE). Data exports are provided for convenience; please cite the associated LuxNoise work if you redistribute them.
