@@ -1,0 +1,7 @@
+# ignore raw sweep outputs and local caches
+data/**/cond*_raw.csv
+data/**/cond*_plot.png
+plots/*.tmp
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
