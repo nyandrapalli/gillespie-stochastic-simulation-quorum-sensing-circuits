@@ -2,6 +2,12 @@
 
 This repository collects the artefacts generated while characterising the LuxNoise simulations across both the initial "Trail" timelapse runs and the larger RNAP/Ribo resource sweeps (Cond1–Cond3).
 
+## Conditions
+
+- **Cond1** - Single-cell LuxI/LuxR quorum-sensing circuit with pLux-GFP reporters and optional burden promoters competing for RNAP and ribosomes.
+- **Cond2** - One-way communication between two cells: producer cell A (pCon-LuxI, optional burden promoters) synthesises AHL, responder cell B (LuxR + pLux-GFP, optional burden) records the signal.
+- **Cond3** - Cross-coupled Lux/Las signalling pair: cell A (LuxI + LasR + pLas-GFP) and cell B (LuxR + pLux-GFP + pLux-LasI) exchange both AHL and the Las-derived signal S, with optional promoter load.
+
 ## Repository layout
 
 - `data/Cond*/summary_cond*.csv` – 500-replicate sweep summaries covering RNAP totals {20, 35, 50, 75, 100, 150, 200} and ribosome totals {50, 100, 200, 300, 400, 500}. Each row stores mean GFP, SD, CV, and CV² computed over the steady-state window (t = 3000–4000).
@@ -41,3 +47,5 @@ Full per-replicate timelapse CSVs are large (tens of MB per grid point) and ther
 ## Licence
 
 Code in this repository is released under the MIT License (see LICENSE). Data exports are provided for convenience; please cite the associated LuxNoise work if you redistribute them.
+
+
