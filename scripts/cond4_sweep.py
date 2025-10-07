@@ -32,57 +32,69 @@ def run_grid(RNAP_vals, Ribo_vals, N=20, T_end=3000, window=(2500, 3000), outdir
                 T_end=T_end,
             )
             t_grid = np.arange(int(T_end) + 1)
-            curves = np.zeros((N, len(t_grid)))
+            G_las_curves = np.zeros((N, len(t_grid)))
+            G_lux_curves = np.zeros((N, len(t_grid)))
             seeds = rng.integers(1, 2**31 - 1, size=N, dtype=np.int64)
             for i in range(N):
-                ti, G = gillespie_cond4(P, seed=int(seeds[i]))
+                ti, G_las, G_lux = gillespie_cond4(P, seed=int(seeds[i]))
                 idx = np.searchsorted(ti, t_grid, side='right') - 1
                 idx[idx < 0] = 0
-                curves[i, :] = G[idx]
+                G_las_curves[i, :] = G_las[idx]
+                G_lux_curves[i, :] = G_lux[idx]
 
-            pd.DataFrame(curves, columns=[f"t{t}" for t in t_grid]).assign(unit_id=lambda d: np.arange(N)).to_csv(
-                os.path.join(outdir, f"cond4_RNAP{R}_Ribo{B}_raw.csv"), index=False
-            )
+            total_curves = G_las_curves + G_lux_curves
+            df = pd.DataFrame(G_las_curves, columns=[f'GLas_t{t}' for t in t_grid])
+            df = df.join(pd.DataFrame(G_lux_curves, columns=[f'GLux_t{t}' for t in t_grid]))
+            df = df.assign(replicate_id=lambda d: np.arange(N))
+            df.to_csv(os.path.join(outdir, f"cond4_RNAP{R}_Ribo{B}_raw.csv"), index=False)
 
-            block = curves[:, w0 : w1 + 1].mean(axis=1)
-            mean = float(block.mean())
-            sd = float(block.std(ddof=0))
-            cv = float(sd / mean) if mean > 0 else float("nan")
-            cv2 = float(cv * cv) if mean > 0 else float("nan")
-            summary.append(
-                {
-                    "condition": "Cond4",
-                    "RNAP": R,
-                    "Ribo": B,
-                    "copies": 10,
-                    "N": N,
-                    "T_end": T_end,
-                    "window_start": w0,
-                    "window_end": w1,
-                    "mean": mean,
-                    "sd": sd,
-                    "CV": cv,
-                    "CV2": cv2,
-                }
-            )
+            block_las = G_las_curves[:, w0 : w1 + 1].mean(axis=1)
+            block_lux = G_lux_curves[:, w0 : w1 + 1].mean(axis=1)
+            block_total = total_curves[:, w0 : w1 + 1].mean(axis=1)
 
-            mean_curve = curves.mean(axis=0)
-            p10 = np.percentile(curves, 10, axis=0)
-            p90 = np.percentile(curves, 90, axis=0)
+            def stats(arr):
+                mean = float(arr.mean())
+                sd = float(arr.std(ddof=0))
+                cv = float(sd / mean) if mean > 0 else float('nan')
+                cv2 = float(cv * cv) if mean > 0 else float('nan')
+                return mean, sd, cv, cv2
+
+            mean_tot, sd_tot, cv_tot, cv2_tot = stats(block_total)
+            mean_las, sd_las, cv_las, cv2_las = stats(block_las)
+            mean_lux, sd_lux, cv_lux, cv2_lux = stats(block_lux)
+            summary.append({
+                'condition': 'Cond4',
+                'RNAP': R,
+                'Ribo': B,
+                'copies': 10,
+                'N': N,
+                'T_end': T_end,
+                'window_start': w0,
+                'window_end': w1,
+                'mean_total': mean_tot,
+                'sd_total': sd_tot,
+                'CV_total': cv_tot,
+                'CV2_total': cv2_tot,
+                'mean_pLasGFP': mean_las,
+                'sd_pLasGFP': sd_las,
+                'CV_pLasGFP': cv_las,
+                'CV2_pLasGFP': cv2_las,
+                'mean_pLuxGFP': mean_lux,
+                'sd_pLuxGFP': sd_lux,
+                'CV_pLuxGFP': cv_lux,
+                'CV2_pLuxGFP': cv2_lux,
+                'mean': mean_tot,
+                'sd': sd_tot,
+                'CV': cv_tot,
+                'CV2': cv2_tot,
+            })
+
+            mean_las_curve = G_las_curves.mean(axis=0)
+            mean_lux_curve = G_lux_curves.mean(axis=0)
+            total_mean_curve = total_curves.mean(axis=0)
             plt.figure(figsize=(8, 4))
             for i in range(min(N, 30)):
-                plt.plot(t_grid, curves[i, :], alpha=0.15, linewidth=0.5)
-            plt.plot(t_grid, mean_curve, linewidth=2.0, label="Mean")
-            plt.fill_between(t_grid, p10, p90, alpha=0.25, label="10–90%")
-            plt.axvspan(w0, w1, alpha=0.1, label="Steady window")
-            plt.xlabel("Time")
-            plt.ylabel("Total GFP")
-            plt.title(f"Cond4 RNAP={R}, Ribo={B}")
-            plt.legend()
-            plt.tight_layout()
-            plt.savefig(os.path.join(outdir, f"cond4_RNAP{R}_Ribo{B}_plot.png"), dpi=150)
-            plt.close()
-
+                plt.plot(t_grid, total_curves[i, :], alpha=0.15, linewidth=0.5)
     summary_df = pd.DataFrame(summary)
     summary_csv = os.path.join(outdir, "summary_cond4.csv")
     summary_df.to_csv(summary_csv, index=False)

@@ -2,7 +2,7 @@
 """
 Cond4 timelapse (single cell containing all plasmids from Cond3).
 Plasmids: pCon–LuxI, pCon–LasR, pCon–LuxR, pLas–GFP, pLux–GFP, pLux–LasI.
-Outputs single-cell GFP (sum of pLas–GFP and pLux–GFP products).
+Exports pLas–GFP and pLux–GFP trajectories separately and their sum.
 """
 import argparse
 import math
@@ -97,7 +97,8 @@ def gillespie_cond4(P: Params4, seed: int | None = None):
 
     t = 0.0
     times = [0.0]
-    GFP_total_trace = [0]
+    G_las_trace = [0]
+    G_lux_trace = [0]
     it = 0
     max_it = int(3e6)
 
@@ -529,9 +530,10 @@ def gillespie_cond4(P: Params4, seed: int | None = None):
                 S -= 1
 
         times.append(t)
-        GFP_total_trace.append(cell['G_las'] + cell['G_lux'])
+        G_las_trace.append(cell['G_las'])
+        G_lux_trace.append(cell['G_lux'])
 
-    return np.array(times), np.array(GFP_total_trace)
+    return np.array(times), np.array(G_las_trace), np.array(G_lux_trace)
 
 
 def run(
@@ -553,59 +555,61 @@ def run(
         n_pLux_lasI=copies,
     )
     t_grid = np.arange(int(T_end) + 1)
-    curves = np.zeros((N, len(t_grid)))
+    G_las_curves = np.zeros((N, len(t_grid)))
+    G_lux_curves = np.zeros((N, len(t_grid)))
     rng = np.random.default_rng(seed)
     seeds = rng.integers(1, 2**31 - 1, size=N, dtype=np.int64)
 
     for i in range(N):
-        ti, G = gillespie_cond4(P, seed=int(seeds[i]))
+        ti, G_las, G_lux = gillespie_cond4(P, seed=int(seeds[i]))
         idx = np.searchsorted(ti, t_grid, side='right') - 1
         idx[idx < 0] = 0
-        curves[i, :] = G[idx]
+        G_las_curves[i, :] = G_las[idx]
+        G_lux_curves[i, :] = G_lux[idx]
 
-    pd.DataFrame(curves, columns=[f"t{t}" for t in t_grid]).assign(unit_id=lambda d: np.arange(N)).to_csv(
-        os.path.join(outdir, "cond4_timelapse_raw.csv"), index=False
-    )
+    total_curves = G_las_curves + G_lux_curves
+    df = pd.DataFrame(G_las_curves, columns=[f'GLas_t{t}' for t in t_grid])
+    df = df.join(pd.DataFrame(G_lux_curves, columns=[f'GLux_t{t}' for t in t_grid]))
+    df = df.assign(replicate_id=lambda d: np.arange(N))
+    df.to_csv(os.path.join(outdir, 'cond4_timelapse_raw.csv'), index=False)
 
     w0, w1 = window
-    block = curves[:, w0 : w1 + 1].mean(axis=1)
-    mean = float(block.mean())
-    sd = float(block.std(ddof=0))
-    cv = float(sd / mean) if mean > 0 else float("nan")
-    cv2 = float(cv * cv) if mean > 0 else float("nan")
-    pd.DataFrame(
-        [
-            {
-                "mean": mean,
-                "sd": sd,
-                "CV": cv,
-                "CV2": cv2,
-                "N": N,
-                "T_end": T_end,
-                "window_start": w0,
-                "window_end": w1,
-                "copies": copies,
-            }
-        ]
-    ).to_csv(os.path.join(outdir, "cond4_summary.csv"), index=False)
+    block_las = G_las_curves[:, w0 : w1 + 1].mean(axis=1)
+    block_lux = G_lux_curves[:, w0 : w1 + 1].mean(axis=1)
+    block_total = total_curves[:, w0 : w1 + 1].mean(axis=1)
 
-    mean_curve = curves.mean(axis=0)
-    p10 = np.percentile(curves, 10, axis=0)
-    p90 = np.percentile(curves, 90, axis=0)
+    def stats(arr):
+        mean = float(arr.mean())
+        sd = float(arr.std(ddof=0))
+        cv = float(sd / mean) if mean > 0 else float('nan')
+        cv2 = float(cv * cv) if mean > 0 else float('nan')
+        return mean, sd, cv, cv2
+
+    mean_tot, sd_tot, cv_tot, cv2_tot = stats(block_total)
+    mean_las, sd_las, cv_las, cv2_las = stats(block_las)
+    mean_lux, sd_lux, cv_lux, cv2_lux = stats(block_lux)
+    pd.DataFrame([{'mean_total': mean_tot, 'sd_total': sd_tot, 'CV_total': cv_tot, 'CV2_total': cv2_tot,
+                  'mean_pLasGFP': mean_las, 'sd_pLasGFP': sd_las, 'CV_pLasGFP': cv_las, 'CV2_pLasGFP': cv2_las,
+                  'mean_pLuxGFP': mean_lux, 'sd_pLuxGFP': sd_lux, 'CV_pLuxGFP': cv_lux, 'CV2_pLuxGFP': cv2_lux,
+                  'N': N, 'T_end': T_end, 'window_start': w0, 'window_end': w1, 'copies': copies}]).to_csv(
+        os.path.join(outdir, 'cond4_summary.csv'), index=False
+    )
+
+    mean_las_curve = G_las_curves.mean(axis=0)
+    mean_lux_curve = G_lux_curves.mean(axis=0)
+    total_mean_curve = total_curves.mean(axis=0)
     plt.figure(figsize=(10, 5))
-    for i in range(min(N, 100)):
-        plt.plot(t_grid, curves[i, :], alpha=0.08, linewidth=0.5)
-    plt.plot(t_grid, mean_curve, linewidth=2.0, label="Mean")
-    plt.fill_between(t_grid, p10, p90, alpha=0.25, label="10–90%")
-    plt.axvspan(w0, w1, alpha=0.1, label="Steady window")
-    plt.xlabel("Time")
-    plt.ylabel("Total GFP")
-    plt.title(f"Cond4 timelapse (copies={copies})")
+    plt.plot(t_grid, mean_las_curve, label='Mean pLas–GFP', linewidth=2.0)
+    plt.plot(t_grid, mean_lux_curve, label='Mean pLux–GFP', linewidth=2.0)
+    plt.plot(t_grid, total_mean_curve, label='Mean total GFP', linewidth=2.5, color='black', alpha=0.7)
+    plt.axvspan(w0, w1, alpha=0.1, label='Steady window')
+    plt.xlabel('Time')
+    plt.ylabel('GFP counts')
+    plt.title(f'Cond4 timelapse (copies={copies})')
     plt.legend()
     plt.tight_layout()
-    plt.savefig(os.path.join(outdir, "cond4_timelapse_plot.png"), dpi=150)
+    plt.savefig(os.path.join(outdir, 'cond4_timelapse_plot.png'), dpi=150)
     plt.close()
-
 
 def parse_args():
     ap = argparse.ArgumentParser()
@@ -621,3 +625,6 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
     run(N=args.N, T_end=args.T, window=(args.w0, args.w1), outdir=args.out, copies=args.copies)
+
+
+
